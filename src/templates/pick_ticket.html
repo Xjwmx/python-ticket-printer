@@ -1,0 +1,94 @@
+{# templates/pick_ticket.html #}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Pick Ticket - {{ order_number }}</title>
+</head>
+<body>
+    <header>
+        <div class="company-info">
+            <h1>Pick Ticket</h1>
+            <div class="order-details">
+                <p><strong>Order:</strong> {{ order_number }}</p>
+                <p><strong>Date:</strong> {{ created_at|date }}</p>
+                <p><strong>Shipping:</strong> {{ shipping_method }}</p>
+            </div>
+        </div>
+    </header>
+
+    <section class="shipping-info">
+        <h2>Ship To:</h2>
+        <div class="address">
+            <p>{{ shipping_address.name }}</p>
+            {% if shipping_address.company %}
+                <p>{{ shipping_address.company }}</p>
+            {% endif %}
+            <p>{{ shipping_address.address1 }}</p>
+            {% if shipping_address.address2 %}
+                <p>{{ shipping_address.address2 }}</p>
+            {% endif %}
+            <p>{{ shipping_address.city }}, {{ shipping_address.province }} {{ shipping_address.zip }}</p>
+            <p>{{ shipping_address.country }}</p>
+            {% if shipping_address.phone %}
+                <p>Phone: {{ shipping_address.phone }}</p>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="items">
+        <h2>Items</h2>
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Product</th>
+                    <th>Quantity</th>
+                    <th>Location</th>
+                    <th>Picked</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in line_items %}
+                    <tr>
+                        <td>{{ item.sku }}</td>
+                        <td>
+                            {{ item.title }}
+                            {% if item.variant_title %}
+                                <br><small>{{ item.variant_title }}</small>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.quantity }}</td>
+                        <td>
+                            {% for location in item.locations %}
+                                {{ location }}{% if not loop.last %}, {% endif %}
+                            {% endfor %}
+                        </td>
+                        <td class="checkbox">□</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    {% if note %}
+        <section class="notes">
+            <h2>Notes</h2>
+            <p>{{ note }}</p>
+        </section>
+    {% endif %}
+
+    <footer>
+        <div class="signatures">
+            <div class="signature-line">
+                <p>Picked By: _____________________</p>
+                <p>Date: _____________________</p>
+            </div>
+            <div class="signature-line">
+                <p>Checked By: _____________________</p>
+                <p>Date: _____________________</p>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
