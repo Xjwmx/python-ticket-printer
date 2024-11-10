@@ -12,15 +12,15 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 from PySide6.QtCore import Qt, QTimer
-from services.print_service import PrintServiceBase
-from models.print_job import PrintJob, PrintJobStatus
+from services.print_service import PrintService
+from models.print_job import PrintJob
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 class PrintPreviewDialog(QDialog):
-    def __init__(self, print_service: PrintServiceBase, parent=None):
+    def __init__(self, print_service: PrintService, parent=None):
         super().__init__(parent)
         self.print_service = print_service
         self.setWindowTitle("Print Documents")
@@ -207,3 +207,10 @@ class PrintPreviewDialog(QDialog):
         self.printer_combo.setEnabled(enabled)
         self.copies_spin.setEnabled(enabled)
         self.cancel_button.setEnabled(enabled)
+
+    def closeEvent(self, event):
+        """Handle dialog close event"""
+        if self.active_job_id:
+            # Could add job cancellation here if needed
+            pass
+        super().closeEvent(event)

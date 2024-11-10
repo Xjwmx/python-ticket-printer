@@ -1,16 +1,20 @@
 # src/services/shopify_client.py
 
+import logging
 from typing import Dict, Optional, Any
 import shopify
 import os
 from dotenv import load_dotenv
 import json
 
+# Set up logging
+logger = logging.getLogger(__name__)
+
 # Load environment variables from .env file
 load_dotenv()
 
 # Environment variables
-API_VERSION = os.getenv("API_VERSION", "2024-10")
+API_VERSION = os.getenv("API_VERSION")
 API_KEY = os.getenv("API_KEY")
 API_SECRET = os.getenv("API_SECRET")
 SHOP_URL = os.getenv("SHOP_URL")
@@ -211,6 +215,15 @@ class ShopifyClient:
                     node {
                       deliveryMethod {
                         methodType
+                        presentedName
+                        brandedPromise {
+                          handle
+                          name
+                        }
+                        additionalInformation {
+                          instructions
+                          phone
+                        }
                       }
                     }
                   }
@@ -220,11 +233,19 @@ class ShopifyClient:
             """
             variables = {"id": order_id}
             result = client.execute(query, variables)
-            result_dict = json.loads(result)  # Parse the JSON string into a dictionary
+
+            # Debug logging
+            logger.debug("Raw GraphQL Response:")
+            logger.debug(result)
+
+            result_dict = json.loads(result)
             if "errors" in result_dict:
+                logger.error("GraphQL Errors:")
+                logger.error(json.dumps(result_dict["errors"], indent=2))
                 raise ShopifyError(f"GraphQL query failed: {result_dict['errors']}")
             return result_dict
         except Exception as e:
+            logger.error(f"Failed to fetch order details: {str(e)}")
             raise ShopifyError(f"Failed to fetch order details: {str(e)}")
 
 

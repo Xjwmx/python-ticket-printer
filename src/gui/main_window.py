@@ -1,5 +1,4 @@
 # src/gui/main_window.py
-import os
 from typing import List
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -24,20 +23,18 @@ logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, dev_mode=True):
         super().__init__()
-        self.setWindowTitle("Shopify Order Print System")
+        self.dev_mode = dev_mode
+        self.setWindowTitle(
+            "Shopify Order Print System" + (" (Development Mode)" if dev_mode else "")
+        )
         self.setMinimumSize(1024, 768)
 
         # Initialize services
         try:
             self.shopify_client = create_client()
             self.document_generator = DocumentGenerator()
-            # Check if running in WSL or dev mode
-            dev_mode = (
-                "WSL_DISTRO_NAME" in os.uname().release
-                or os.environ.get("DEV_MODE") == "1"
-            )
             self.print_service = create_print_service(dev_mode=dev_mode)
         except Exception as e:
             logger.error(f"Failed to initialize services: {str(e)}")
@@ -149,6 +146,14 @@ class MainWindow(QMainWindow):
             dialog.set_documents(selected_orders, combined_pdf)
 
             if dialog.exec():
+                if self.dev_mode:
+                    output_dir = self.print_service.output_dir
+                    QMessageBox.information(
+                        self,
+                        "Development Mode",
+                        f"Print job completed!\n\nPDF has been saved to:\n{output_dir}\n\n"
+                        "Check the output directory for the generated PDF file.",
+                    )
                 self.status_bar.showMessage("Print job submitted successfully")
             else:
                 self.status_bar.showMessage("Print cancelled")
@@ -182,3 +187,12 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Error combining PDFs: {str(e)}")
             raise
+
+    def closeEvent(self, event):
+        """Handle application shutdown"""
+        try:
+            if hasattr(self, "print_service"):
+                self.print_service.shutdown()
+        except Exception as e:
+            logger.error(f"Error during shutdown: {str(e)}")
+        super().closeEvent(event)
