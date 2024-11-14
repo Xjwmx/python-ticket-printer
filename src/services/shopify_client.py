@@ -119,62 +119,63 @@ class ShopifyClient:
             raise ShopifyError(f"Failed to fetch unprinted orders: {str(e)}")
 
     def get_order_details(self, order_id: str) -> Dict[str, Any]:
-        """
-        Fetch detailed information for a single order using GraphQL
-        """
+        """Fetch detailed information for a single order using GraphQL"""
         try:
             client = shopify.GraphQL()
             query = """
-          query GetOrder($id: ID!) {
-            order(id: $id) {
-              id
-              name
-              createdAt
-              tags
-              note
-              displayFinancialStatus
-              displayFulfillmentStatus
-              email
-              phone
-              totalPriceSet {
-                shopMoney {
-                  amount
-                  currencyCode
-                }
-              }
-              shippingAddress {
-                firstName
-                lastName
-                address1
-                address2
-                city
-                province
-                zip
-                country
+            query GetOrder($id: ID!) {
+              order(id: $id) {
+                id
+                name
+                createdAt
+                tags
+                note
+                displayFinancialStatus
+                displayFulfillmentStatus
+                email
                 phone
-              }
-              lineItems(first: 50) {
-                edges {
-                  node {
-                    quantity
-                    sku
-                    vendor
-                    product {
-                      title
-                    }
-                    variant {
-                      title
+                totalPriceSet {
+                  shopMoney {
+                    amount
+                    currencyCode
+                  }
+                }
+                shippingAddress {
+                  firstName
+                  lastName
+                  address1
+                  address2
+                  city
+                  province
+                  zip
+                  country
+                  phone
+                }
+                lineItems(first: 50) {
+                  edges {
+                    node {
+                      quantity
                       sku
-                      image {
-                        url
-                        altText
+                      vendor
+                      product {
+                        title
                       }
-                      inventoryItem {
-                        inventoryLevels(first: 10) {
-                          edges {
-                            node {
-                              location {
-                                name
+                      variant {
+                        title
+                        image {
+                          url
+                        }
+                        inventoryItem {
+                          inventoryLevels(first: 100) {
+                            edges {
+                              node {
+                                location {
+                                  name
+                                }
+                                quantities(names: ["available"]) {
+                                  name
+                                  quantity
+                                }
                               }
                             }
                           }
@@ -183,18 +184,17 @@ class ShopifyClient:
                     }
                   }
                 }
-              }
-              shippingLines(first: 1) {
-                edges {
-                  node {
-                    title
-                    code
+                shippingLines(first: 1) {
+                  edges {
+                    node {
+                      title
+                      code
+                    }
                   }
                 }
               }
             }
-          }
-          """
+            """
             variables = {"id": order_id}
             result = client.execute(query, variables)
             result_dict = json.loads(result)

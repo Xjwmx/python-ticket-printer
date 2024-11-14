@@ -1,15 +1,17 @@
-# src/services/document_generator.py
-
+import json
+import tempfile
+import shutil
+import hashlib
+from urllib.parse import urlparse
+import requests
+from datetime import datetime
+from pathlib import Path
+import logging
+import os
+import base64
+from typing import Dict, Any, List, Optional
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML, CSS
-from pathlib import Path
-import tempfile
-import os
-from typing import Dict, Any, List
-import logging
-from datetime import datetime
-import requests
-import json
 
 logger = logging.getLogger(__name__)
 
@@ -20,17 +22,23 @@ class DocumentGenerator:
         # Get the absolute path to the templates directory
         self.template_dir = Path(__file__).parent.parent / "templates"
 
-        # Initialize Jinja2 environment
+        # Create a temp directory for image caching
+        self.image_cache_dir = Path(tempfile.gettempdir()) / "shopify_print_images"
+        self.image_cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # Initialize Jinja2 environment with the templates directory
         self.env = Environment(
             loader=FileSystemLoader(str(self.template_dir)), autoescape=True
         )
 
         # Add custom filters
         self.env.filters["date"] = self._format_date
+        self.env.filters["cached_image_path"] = self._get_cached_image_path
 
-        # Load base CSS files
-        self.base_css = CSS(filename=str(self.template_dir / "styles" / "base.css"))
-        self.print_css = CSS(filename=str(self.template_dir / "styles" / "print.css"))
+        # Get absolute paths for CSS files
+        css_dir = self.template_dir / "styles"
+        self.base_css = CSS(filename=str(css_dir / "base.css"))
+        self.print_css = CSS(filename=str(css_dir / "print.css"))
 
     def _format_date(self, value):
         """Format ISO date string to human-readable format"""
@@ -43,8 +51,79 @@ class DocumentGenerator:
             logger.error(f"Error formatting date {value}: {str(e)}")
             return value
 
-    def _get_inventory_locations(self, variant: Dict[str, Any]) -> List[str]:
-        """Extract inventory locations from variant data"""
+    def _get_placeholder_data_uri(self) -> str:
+        """Generate a simple SVG placeholder as a data URI"""
+        svg = """<?xml version="1.0" encoding="UTF-8"?>
+        <svg width="150" height="150" version="1.1" viewBox="0 0 150 150" xmlns="http://www.w3.org/2000/svg">
+            <rect width="150" height="150" fill="#f0f0f0"/>
+            <text x="75" y="75" font-family="Arial" font-size="14" 
+                  text-anchor="middle" dominant-baseline="middle" fill="#666">
+                No Image
+            </text>
+        </svg>"""
+
+        encoded = base64.b64encode(svg.encode()).decode()
+        return f"data:image/svg+xml;base64,{encoded}"
+
+    def _download_image(self, url: str) -> Optional[Path]:
+        """
+        Download and cache an image from a URL
+
+        Args:
+            url: Image URL
+
+        Returns:
+            Path to cached image or None if download fails
+        """
+        try:
+            # Create a unique filename based on the URL
+            url_hash = hashlib.md5(url.encode()).hexdigest()
+            parsed_url = urlparse(url)
+            extension = Path(parsed_url.path).suffix or ".jpg"
+            cached_path = self.image_cache_dir / f"{url_hash}{extension}"
+
+            # If already cached, return path
+            if cached_path.exists():
+                return cached_path
+
+            # Download the image
+            response = requests.get(url, stream=True, timeout=5)
+            response.raise_for_status()
+
+            # Save to cache
+            with open(cached_path, "wb") as f:
+                shutil.copyfileobj(response.raw, f)
+
+            logger.info(f"Downloaded and cached image from {url} to {cached_path}")
+            return cached_path
+
+        except Exception as e:
+            logger.error(f"Failed to download image from {url}: {str(e)}")
+            return None
+
+    def _get_cached_image_path(self, url: str) -> str:
+        """
+        Jinja2 filter to get path to cached image
+
+        Args:
+            url: Original image URL
+
+        Returns:
+            Path to cached image or data URI for placeholder
+        """
+        if not url:
+            return self._get_placeholder_data_uri()
+
+        if url.startswith("/api/placeholder"):
+            return self._get_placeholder_data_uri()
+
+        cached_path = self._download_image(url)
+        if cached_path:
+            return str(cached_path)
+        return self._get_placeholder_data_uri()
+
+    def _get_inventory_locations(self, variant: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract inventory locations and quantities from variant data"""
         try:
             inventory_levels = (
                 variant.get("inventoryItem", {})
@@ -54,17 +133,31 @@ class DocumentGenerator:
 
             locations = []
             for level in inventory_levels:
-                location_name = (
-                    level.get("node", {}).get("location", {}).get("name", "Unknown")
-                )
-                if location_name:
-                    locations.append(location_name)
+                node = level.get("node", {})
+                location_name = node.get("location", {}).get("name", "Unknown")
 
-            return locations if locations else ["Default Location"]
+                # Get available quantity
+                quantities = node.get("quantities", [])
+                available = 0
+                for q in quantities:
+                    if q.get("name") == "available":
+                        available = q.get("quantity", 0)
+                        break
+
+                if location_name:
+                    locations.append({"name": location_name, "quantity": available})
+
+            # Sort locations by name for consistent display
+            locations.sort(key=lambda x: x["name"])
+            return (
+                locations
+                if locations
+                else [{"name": "Default Location", "quantity": 0}]
+            )
 
         except Exception as e:
             logger.error(f"Error getting inventory locations: {str(e)}")
-            return ["Default Location"]
+            return [{"name": "Default Location", "quantity": 0}]
 
     def _get_shipping_method(self, order_data: Dict[str, Any]) -> str:
         """Extract shipping method with multiple fallbacks"""
@@ -87,43 +180,50 @@ class DocumentGenerator:
     def _process_line_items(self, order_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Process line items from order data"""
         processed_items = []
-        logger.info("Processing line items...")
-
         try:
             line_items = order_data.get("lineItems", {}).get("edges", [])
             logger.info(f"Found {len(line_items)} raw line items")
 
             for edge in line_items:
-                node = edge.get("node", {})
-                variant = node.get("variant", {})
-                product = node.get("product", {})
+                try:
+                    node = edge.get("node", {})
+                    variant = node.get("variant", {}) or {}
+                    product = node.get("product", {}) or {}
 
-                # Get image URL directly from variant
-                image_url = variant.get("image", {}).get(
-                    "url", "/api/placeholder/150/150"
-                )
+                    # Get image URL with better fallback handling
+                    image_url = None
+                    if variant and variant.get("image", {}).get("url"):
+                        image_url = variant["image"]["url"]
+                    elif product.get("featuredImage", {}).get("url"):
+                        image_url = product["featuredImage"]["url"]
 
-                item = {
-                    "sku": node.get("sku") or variant.get("sku", "No SKU"),
-                    "quantity": node.get("quantity", 0),
-                    "title": product.get("title", "Unknown Product"),
-                    "variant_title": variant.get("title", ""),
-                    "vendor": node.get("vendor", ""),
-                    "locations": self._get_inventory_locations(variant),
-                    "image_url": image_url,
-                }
+                    if not image_url:
+                        image_url = "/api/placeholder/150/150"
 
-                logger.info(
-                    f"Processed line item: {json.dumps({**item, 'image_url': '...'}, indent=2)}"
-                )
-                processed_items.append(item)
+                    # Get inventory locations with quantities
+                    locations = self._get_inventory_locations(variant)
+
+                    item = {
+                        "sku": node.get("sku", "No SKU"),
+                        "quantity": node.get("quantity", 0),
+                        "title": product.get("title", "Unknown Product"),
+                        "variant_title": variant.get("title", ""),
+                        "vendor": node.get("vendor", "No Vendor"),
+                        "locations": locations,
+                        "image_url": image_url,
+                    }
+
+                    processed_items.append(item)
+
+                except Exception as e:
+                    logger.error(f"Error processing line item: {str(e)}")
+                    continue
+
+            return processed_items
 
         except Exception as e:
             logger.error(f"Error processing line items: {str(e)}")
-            logger.error(f"Order data: {json.dumps(order_data, indent=2)}")
             return []
-
-        return processed_items
 
     def _process_order_data(self, order_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process raw order data into template-friendly format"""
@@ -225,8 +325,8 @@ class DocumentGenerator:
                 temp_html_path = temp_html.name
 
             try:
-                # Generate PDF
-                html = HTML(filename=temp_html_path)
+                # Generate PDF with base URL for asset resolution
+                html = HTML(filename=temp_html_path, base_url=str(self.template_dir))
                 pdf_content = html.write_pdf(
                     stylesheets=[self.base_css, self.print_css]
                 )
@@ -271,3 +371,11 @@ class DocumentGenerator:
             raise Exception(f"Errors generating pick tickets:\n{error_msg}")
 
         return pdfs
+
+    def __del__(self):
+        """Cleanup temporary files on deletion"""
+        try:
+            if hasattr(self, "image_cache_dir"):
+                shutil.rmtree(self.image_cache_dir, ignore_errors=True)
+        except:
+            pass
