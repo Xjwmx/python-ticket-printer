@@ -1,9 +1,9 @@
 # src/services/print_service.py
+
 from datetime import datetime
 import datetime as dt
 from typing import List, Optional, Callable, Dict
 from PySide6.QtPrintSupport import QPrinter, QPrinterInfo
-from PyPDF2 import PdfReader, PdfWriter
 import tempfile
 import os
 import logging
@@ -28,7 +28,7 @@ class PrintService:
             self.output_dir.mkdir(parents=True, exist_ok=True)
             logger.info(f"Dev mode output directory: {self.output_dir}")
 
-        # Rest of existing initialization remains the same
+        # Rest of existing initialization
         self._printer = None
         self.active_jobs: Dict[str, PrintJob] = {}
         self.job_queue: Queue = Queue()
@@ -36,6 +36,10 @@ class PrintService:
         self.running = True
         self.print_thread = Thread(target=self._process_print_queue, daemon=True)
         self.print_thread.start()
+
+    def get_print_output_dir(self) -> Optional[Path]:
+        """Get the output directory for dev mode"""
+        return self.output_dir if self.dev_mode else None
 
     @property
     def printer(self) -> QPrinter:
@@ -186,6 +190,19 @@ class PrintService:
                 logger.exception(
                     "Detailed error information:"
                 )  # This will log the full stack trace
+                return False
+
+        else:
+            try:
+                # Real printing implementation would go here
+                # For now, just simulate success
+                logger.warning("Real printing not implemented yet")
+                if on_progress:
+                    on_progress(1, 1)
+                return True
+
+            except Exception as e:
+                logger.error(f"Error printing job: {str(e)}")
                 return False
 
 

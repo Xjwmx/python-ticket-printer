@@ -1,94 +1,89 @@
 {# templates/pick_ticket.html #}
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Pick Ticket - {{ order_number }}</title>
-</head>
-<body>
-    <header>
-        <div class="company-info">
-            <h1>Pick Ticket</h1>
-            <div class="order-details">
-                <p><strong>Order:</strong> {{ order_number }}</p>
-                <p><strong>Date:</strong> {{ created_at|date }}</p>
-                <p><strong>Shipping:</strong> {{ shipping_method }}</p>
+{% extends "base.html" %}
+
+{% block title %}Pick Ticket - {{ order.number }}{% endblock %}
+
+{% block styles %}
+    <link rel="stylesheet" href="styles/base.css">
+    <link rel="stylesheet" href="styles/print.css">
+{% endblock %}
+
+{% block content %}
+<div class="order-container">
+    <div class="header">
+        <div class="order-number">{{ order.number }}</div>
+        <div class="document-type">Pick Ticket</div>
+        
+        <div class="delivery-method">
+            {{ order.shipping_method }}
+        </div>
+
+        <div class="address-section">
+            <div class="address-column">
+                <h3>Ship To</h3>
+                <p>{{ order.shipping_address.name }}</p>
+                {% if order.shipping_address.company %}
+                    <p>{{ order.shipping_address.company }}</p>
+                {% endif %}
+                <p>{{ order.shipping_address.address1 }}</p>
+                {% if order.shipping_address.address2 %}
+                    <p>{{ order.shipping_address.address2 }}</p>
+                {% endif %}
+                <p>{{ order.shipping_address.city }}, {{ order.shipping_address.province }} {{ order.shipping_address.zip }}</p>
+                <p>{{ order.shipping_address.country }}</p>
+                {% if order.shipping_address.phone %}
+                    <p>Phone: {{ order.shipping_address.phone }}</p>
+                {% endif %}
             </div>
         </div>
-    </header>
+    </div>
 
-    <section class="shipping-info">
-        <h2>Ship To:</h2>
-        <div class="address">
-            <p>{{ shipping_address.name }}</p>
-            {% if shipping_address.company %}
-                <p>{{ shipping_address.company }}</p>
-            {% endif %}
-            <p>{{ shipping_address.address1 }}</p>
-            {% if shipping_address.address2 %}
-                <p>{{ shipping_address.address2 }}</p>
-            {% endif %}
-            <p>{{ shipping_address.city }}, {{ shipping_address.province }} {{ shipping_address.zip }}</p>
-            <p>{{ shipping_address.country }}</p>
-            {% if shipping_address.phone %}
-                <p>Phone: {{ shipping_address.phone }}</p>
-            {% endif %}
-        </div>
-    </section>
-
-    <section class="items">
-        <h2>Items</h2>
-        <table class="items-table">
-            <thead>
-                <tr>
-                    <th>SKU</th>
-                    <th>Product</th>
-                    <th>Quantity</th>
-                    <th>Location</th>
-                    <th>Picked</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in line_items %}
-                    <tr>
-                        <td>{{ item.sku }}</td>
-                        <td>
-                            {{ item.title }}
-                            {% if item.variant_title %}
-                                <br><small>{{ item.variant_title }}</small>
-                            {% endif %}
-                        </td>
-                        <td>{{ item.quantity }}</td>
-                        <td>
+    <div class="line-items">
+        {% for item in order.line_items %}
+            <div class="line-item">
+                <div class="item-image">
+                    <img src="{{ item.image_url }}" alt="Product Image" />
+                </div>
+                <div class="item-details">
+                    <div>
+                        <strong>{{ item.title }}</strong>
+                        {% if item.variant_title %}
+                            <p>Variant: {{ item.variant_title }}</p>
+                        {% endif %}
+                        {% if item.vendor %}
+                            <p>Vendor: {{ item.vendor }}</p>
+                        {% endif %}
+                        <p>SKU: {{ item.sku }}</p>
+                    </div>
+                    <div>
+                        <strong>Order Details</strong>
+                        <p>Quantity: {{ item.quantity }}</p>
+                        {% if item.locations %}
+                        <div class="inventory-locations">
+                            <strong>Inventory Locations</strong>
                             {% for location in item.locations %}
-                                {{ location }}{% if not loop.last %}, {% endif %}
+                                <p>{{ location }}</p>
                             {% endfor %}
-                        </td>
-                        <td class="checkbox">□</td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </section>
-
-    {% if note %}
-        <section class="notes">
-            <h2>Notes</h2>
-            <p>{{ note }}</p>
-        </section>
-    {% endif %}
-
-    <footer>
-        <div class="signatures">
-            <div class="signature-line">
-                <p>Picked By: _____________________</p>
-                <p>Date: _____________________</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
-            <div class="signature-line">
-                <p>Checked By: _____________________</p>
-                <p>Date: _____________________</p>
-            </div>
+        {% endfor %}
+    </div>
+
+    <div class="totals">
+        <div class="total-row final">
+            <strong>Order Total:</strong>
+            <span>${{ order.total }}</span>
         </div>
-    </footer>
-</body>
-</html>
+    </div>
+
+    <div class="employee-section">
+        <div class="signature-line">Picked By:<span></span></div>
+        <div class="signature-line">Outslip Number:<span></span></div>
+        <div class="signature-line">ET:<span></span></div>
+        <div class="signature-line">Packed By:<span></span></div>
+    </div>
+</div>
+{% endblock %}

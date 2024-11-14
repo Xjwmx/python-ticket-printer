@@ -1,0 +1,14 @@
+@page {
+    size: letter;
+    margin: 0.5in;
+}
+
+@media print {
+    body {
+        padding: 0;
+    }
+    
+    .line-item {
+        page-break-inside: avoid;
+    }
+}

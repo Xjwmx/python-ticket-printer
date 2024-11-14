@@ -126,14 +126,34 @@ class MainWindow(QMainWindow):
 
             # Get full order details for selected orders
             order_details = []
-            for order_id in selected_orders:
-                details = self.shopify_client.get_order_details(order_id)
-                if details and "data" in details and "order" in details["data"]:
-                    order_details.append(details["data"]["order"])
-                else:
-                    raise ValueError(f"Failed to get details for order {order_id}")
+            failed_orders = []
 
-            # Generate PDFs
+            for order_id in selected_orders:
+                try:
+                    details = self.shopify_client.get_order_details(order_id)
+                    if details and "data" in details and "order" in details["data"]:
+                        order_data = details["data"]["order"]
+                        # Add some safe defaults for missing data
+                        if "fulfillmentOrders" not in order_data:
+                            order_data["fulfillmentOrders"] = {"edges": []}
+                        if "shippingLines" not in order_data:
+                            order_data["shippingLines"] = {"edges": []}
+                        order_details.append(order_data)
+                    else:
+                        failed_orders.append(
+                            f"Order {order_id} - Invalid response format"
+                        )
+                except Exception as e:
+                    failed_orders.append(f"Order {order_id} - {str(e)}")
+
+            if failed_orders:
+                error_msg = "Failed to fetch some orders:\n" + "\n".join(failed_orders)
+                logger.error(error_msg)
+                QMessageBox.warning(self, "Warning", error_msg)
+                if not order_details:  # If no orders were successfully fetched
+                    return
+
+            # Generate PDFs for successful orders
             pdfs = self.document_generator.generate_batch_pick_tickets(order_details)
             if not pdfs:
                 raise ValueError("No documents generated")
@@ -143,7 +163,7 @@ class MainWindow(QMainWindow):
 
             # Show print preview dialog
             dialog = PrintPreviewDialog(self.print_service, self)
-            dialog.set_documents(selected_orders, combined_pdf)
+            dialog.set_documents([order["id"] for order in order_details], combined_pdf)
 
             if dialog.exec():
                 if self.dev_mode:

@@ -121,87 +121,60 @@ class ShopifyClient:
     def get_order_details(self, order_id: str) -> Dict[str, Any]:
         """
         Fetch detailed information for a single order using GraphQL
-
-        Args:
-            order_id: Shopify order ID (gid://shopify/Order/NUMBER format)
-
-        Returns:
-            Dict containing detailed order information
-
-        Raises:
-            ShopifyError: If the query fails
         """
         try:
             client = shopify.GraphQL()
             query = """
-            query GetOrder($id: ID!) {
-              order(id: $id) {
-                id
-                name
-                createdAt
-                tags
-                note
-                displayFinancialStatus
-                displayFulfillmentStatus
-                email
+          query GetOrder($id: ID!) {
+            order(id: $id) {
+              id
+              name
+              createdAt
+              tags
+              note
+              displayFinancialStatus
+              displayFulfillmentStatus
+              email
+              phone
+              totalPriceSet {
+                shopMoney {
+                  amount
+                  currencyCode
+                }
+              }
+              shippingAddress {
+                firstName
+                lastName
+                address1
+                address2
+                city
+                province
+                zip
+                country
                 phone
-                totalPriceSet {
-                  shopMoney {
-                    amount
-                    currencyCode
-                  }
-                }
-                billingAddressMatchesShippingAddress
-                shippingAddress {
-                  firstName
-                  lastName
-                  address1
-                  address2
-                  city
-                  province
-                  zip
-                  country
-                  phone
-                }
-                billingAddress {
-                  firstName
-                  lastName
-                  name
-                  company
-                  address1
-                  address2
-                  city
-                  province
-                  provinceCode
-                  country
-                  zip
-                  phone
-                }
-                lineItems(first: 50) {
-                  edges {
-                    node {
-                      quantity
+              }
+              lineItems(first: 50) {
+                edges {
+                  node {
+                    quantity
+                    sku
+                    vendor
+                    product {
+                      title
+                    }
+                    variant {
+                      title
                       sku
-                      vendor
-                      product {
-                        title
+                      image {
+                        url
+                        altText
                       }
-                      variant {
-                        title
-                        image {
-                          url
-                        }
-                        inventoryItem {
-                          inventoryLevels(first: 100) {
-                            edges {
-                              node {
-                                location {
-                                  name
-                                }
-                                quantities(names: ["available"]) {
-                                  name
-                                  quantity
-                                }
+                      inventoryItem {
+                        inventoryLevels(first: 10) {
+                          edges {
+                            node {
+                              location {
+                                name
                               }
                             }
                           }
@@ -210,42 +183,25 @@ class ShopifyClient:
                     }
                   }
                 }
-                fulfillmentOrders(first: 5) {
-                  edges {
-                    node {
-                      deliveryMethod {
-                        methodType
-                        presentedName
-                        brandedPromise {
-                          handle
-                          name
-                        }
-                        additionalInformation {
-                          instructions
-                          phone
-                        }
-                      }
-                    }
+              }
+              shippingLines(first: 1) {
+                edges {
+                  node {
+                    title
+                    code
                   }
                 }
               }
             }
-            """
+          }
+          """
             variables = {"id": order_id}
             result = client.execute(query, variables)
-
-            # Debug logging
-            logger.debug("Raw GraphQL Response:")
-            logger.debug(result)
-
             result_dict = json.loads(result)
             if "errors" in result_dict:
-                logger.error("GraphQL Errors:")
-                logger.error(json.dumps(result_dict["errors"], indent=2))
                 raise ShopifyError(f"GraphQL query failed: {result_dict['errors']}")
             return result_dict
         except Exception as e:
-            logger.error(f"Failed to fetch order details: {str(e)}")
             raise ShopifyError(f"Failed to fetch order details: {str(e)}")
 
 

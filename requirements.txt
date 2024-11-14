@@ -1,7 +1,10 @@
 Brotli==1.1.0
+certifi==2024.8.30
 cffi==1.17.1
+charset-normalizer==3.4.0
 cssselect2==0.7.0
 fonttools==4.54.1
+idna==3.10
 iniconfig==2.0.0
 Jinja2==3.1.4
 MarkupSafe==3.0.2
@@ -20,11 +23,13 @@ PySide6_Essentials==6.8.0.2
 pytest==8.3.3
 python-dotenv==1.0.1
 PyYAML==6.0.2
+requests==2.32.3
 shiboken6==6.8.0.2
 ShopifyAPI==12.7.0
 six==1.16.0
 tinycss2==1.4.0
 tinyhtml5==2.0.0
+urllib3==2.2.3
 weasyprint==63.0
 webencodings==0.5.1
 zopfli==0.2.3.post1

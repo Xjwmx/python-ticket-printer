@@ -47,7 +47,6 @@ class OrderTableWidget(QTableWidget):
     def load_orders(self, orders_data):
         """Load orders data into the table"""
         try:
-            # Debug: Log the structure we're working with
             logger.info("Processing orders data structure:")
             logger.info(json.dumps(orders_data, indent=2))
 
@@ -61,10 +60,6 @@ class OrderTableWidget(QTableWidget):
             orders = orders_data.get("data", {}).get("orders", {}).get("edges", [])
             logger.info(f"Found {len(orders)} orders to process")
 
-            if not orders:
-                logger.info("No orders found to display")
-                return
-
             for i, edge in enumerate(orders):
                 logger.info(f"Processing order {i+1}:")
                 logger.info(json.dumps(edge, indent=2))
@@ -74,32 +69,31 @@ class OrderTableWidget(QTableWidget):
                     logger.warning(f"Skipping order {i+1} - no node data")
                     continue
 
-                row_position = self.rowCount()
-                self.insertRow(row_position)
-
                 try:
-                    # Extract data with safe gets
+                    # Extract data with safe gets and defaults
                     order_name = node.get("name", "N/A")
+
+                    # Format date
                     created_at = node.get("createdAt", "")
-                    if created_at:
-                        try:
-                            created_at = datetime.fromisoformat(
-                                created_at.replace("Z", "+00:00")
-                            )
-                            formatted_date = created_at.strftime("%Y-%m-%d %H:%M")
-                        except ValueError:
-                            formatted_date = "Invalid Date"
-                    else:
-                        formatted_date = "No Date"
+                    formatted_date = self._format_date(created_at)
 
+                    # Handle shipping address safely
                     shipping_address = node.get("shippingAddress", {})
-                    customer_name = shipping_address.get("name", "N/A")
-                    location = f"{shipping_address.get('city', 'N/A')}, {shipping_address.get('province', 'N/A')}"
+                    if shipping_address is None:
+                        shipping_address = {}
 
-                    money = node.get("totalPriceSet", {}).get("shopMoney", {})
-                    formatted_total = (
-                        f"{money.get('currencyCode', '')} {money.get('amount', '0.00')}"
+                    customer_name = shipping_address.get("name", "No Name")
+                    city = shipping_address.get("city", "No City")
+                    province = shipping_address.get("province", "No Province")
+                    location = (
+                        f"{city}, {province}" if city != "No City" else "No Location"
                     )
+
+                    # Format total price
+                    money = node.get("totalPriceSet", {}).get("shopMoney", {})
+                    currency = money.get("currencyCode", "USD")
+                    amount = money.get("amount", "0.00")
+                    formatted_total = f"{currency} {amount}"
 
                     # Create table items
                     items = [
@@ -112,14 +106,15 @@ class OrderTableWidget(QTableWidget):
                         self._create_item(node.get("id", "")),
                     ]
 
-                    # Add items to row
+                    # Add row
+                    row_position = self.rowCount()
+                    self.insertRow(row_position)
                     for col, item in enumerate(items):
                         self.setItem(row_position, col, item)
 
                 except Exception as e:
                     logger.error(f"Error processing order {i+1}: {str(e)}")
                     logger.error(f"Order data: {json.dumps(node, indent=2)}")
-                    self.removeRow(row_position)
                     continue
 
             self.setSortingEnabled(True)  # Re-enable sorting
@@ -127,6 +122,16 @@ class OrderTableWidget(QTableWidget):
         except Exception as e:
             logger.error(f"Error loading orders into table: {str(e)}")
             raise
+
+    def _format_date(self, date_str: str) -> str:
+        """Format date string safely"""
+        if not date_str:
+            return "No Date"
+        try:
+            date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+            return date.strftime("%Y-%m-%d %H:%M")
+        except (ValueError, AttributeError):
+            return "Invalid Date"
 
     def _create_item(self, text):
         """Create a non-editable table item"""
